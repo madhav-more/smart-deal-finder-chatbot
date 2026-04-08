@@ -1,7 +1,6 @@
 import puppeteer from 'puppeteer';
 import logger from '../config/logger.js';
 
-const GOOGLE_CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const BLOCKED_RESOURCES = ['image', 'font', 'stylesheet', 'media', 'other'];
 
 /**
@@ -9,7 +8,7 @@ const BLOCKED_RESOURCES = ['image', 'font', 'stylesheet', 'media', 'other'];
  */
 const configurePage = async (page) => {
     await page.setViewport({ width: 1366, height: 768 });
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     await page.setExtraHTTPHeaders({
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -214,7 +213,6 @@ export const searchProducts = async (query) => {
     let browser;
     try {
         browser = await puppeteer.launch({
-            executablePath: GOOGLE_CHROME_PATH,
             headless: "new",
             args: [
                 '--no-sandbox',

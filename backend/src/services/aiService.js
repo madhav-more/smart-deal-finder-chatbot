@@ -1,14 +1,17 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import logger from '../config/logger.js';
 
-// Initialize Groq API
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
-});
+// Initialize Gemini API
+const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+const geminiModel = genAI ? genAI.getGenerativeModel({ model: "gemini-1.5-flash" }) : null;
 
-// Use a fast model for intent parsing and a better one for responses if needed
-// Switching to Mixtral as Llama 3 70b (preview) was decommissioned
-const MODEL_NAME = "llama-3.3-70b-versatile";
+// Initialize Groq API (Fallback)
+const groq = process.env.GROQ_API_KEY ? new Groq({
+    apiKey: process.env.GROQ_API_KEY
+}) : null;
+
+const GROQ_MODEL_NAME = "llama-3.3-70b-versatile";
 
 /**
  * Parsed user intent from message
@@ -45,22 +48,44 @@ export const parseIntent = async (message) => {
         Only return the JSON object, no markdown formatting.
         `;
 
-        const completion = await groq.chat.completions.create({
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: message }
-            ],
-            model: MODEL_NAME,
-            temperature: 0,
-            response_format: { type: "json_object" } // Enforce JSON mode
-        });
+        // 1. Try Gemini
+        if (geminiModel) {
+            try {
+                const result = await geminiModel.generateContent({
+                    contents: [{ role: "user", parts: [{ text: systemPrompt + "\nUser Message: " + message }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                    }
+                });
+                const response = result.response;
+                const text = response.text();
+                return JSON.parse(text);
+            } catch (geminiError) {
+                logger.warn('Gemini intent parsing failed, falling back to Groq:', geminiError.message);
+            }
+        }
 
-        const content = completion.choices[0]?.message?.content || "{}";
-        return JSON.parse(content);
+        // 2. Fallback to Groq
+        if (groq) {
+            const completion = await groq.chat.completions.create({
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: message }
+                ],
+                model: GROQ_MODEL_NAME,
+                temperature: 0,
+                response_format: { type: "json_object" }
+            });
+
+            const content = completion.choices[0]?.message?.content || "{}";
+            return JSON.parse(content);
+        }
+
+        throw new Error('No AI service (Gemini or Groq) available');
 
     } catch (error) {
-        logger.error('Error parsing intent with Groq:', error);
-        // Fallback to basic regex if AI fails
+        logger.error('Error parsing intent:', error);
+        // Fallback to basic regex if all AI fails
         const isSearch = /price|buy|cost|deal|find/i.test(message);
         return {
             isSearch,
@@ -97,19 +122,34 @@ export const generateResponse = async (userMessage, searchResults) => {
         Search Results: ${JSON.stringify(searchResults.slice(0, 5))}
         `;
 
-        const completion = await groq.chat.completions.create({
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userContent }
-            ],
-            model: MODEL_NAME,
-            temperature: 0.7,
-        });
+        // 1. Try Gemini
+        if (geminiModel) {
+            try {
+                const result = await geminiModel.generateContent(systemPrompt + "\n" + userContent);
+                return result.response.text();
+            } catch (geminiError) {
+                logger.warn('Gemini response generation failed, falling back to Groq:', geminiError.message);
+            }
+        }
 
-        return completion.choices[0]?.message?.content || "I found some deals, please check the list below!";
+        // 2. Fallback to Groq
+        if (groq) {
+            const completion = await groq.chat.completions.create({
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userContent }
+                ],
+                model: GROQ_MODEL_NAME,
+                temperature: 0.7,
+            });
+
+            return completion.choices[0]?.message?.content || "I found some deals, please check the list below!";
+        }
+
+        return "I found some deals, but my summarizer is currently offline. Please check the results below!";
 
     } catch (error) {
-        logger.error('Error generating response with Groq:', error);
+        logger.error('Error generating response:', error);
         return "I found some deals, but I'm having trouble summarizing them. Please check the results below!";
     }
 };
