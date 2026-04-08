@@ -207,7 +207,7 @@ const getMockData = (query) => {
 };
 
 /**
- * Main Search Function
+ * Main Search Function (Parallel)
  */
 export const searchProducts = async (query) => {
     let browser;
@@ -223,18 +223,41 @@ export const searchProducts = async (query) => {
             ]
         });
 
-        const page = await browser.newPage();
-        await configurePage(page);
+        // Search Workers
+        const scrapeTask = async (scrapeFn) => {
+            const page = await browser.newPage();
+            await configurePage(page);
+            try {
+                // Add a source-specific timeout
+                const sourceResults = await Promise.race([
+                    scrapeFn(page, query),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Source timeout')), 12000))
+                ]);
+                return sourceResults;
+            } catch (err) {
+                logger.warn(`Individual scrape task failed: ${err.message}`);
+                return [];
+            } finally {
+                await page.close();
+            }
+        };
 
-        // Strategy 1: Try Google Shopping (Often blocked but worth a shot)
-        // results = await scrapeGoogleShopping(page, query);
+        logger.info(`Starting PARALLEL search for: ${query}`);
+        
+        // Execute all scraping tasks in parallel
+        const startTime = Date.now();
+        const resultsArray = await Promise.all([
+            scrapeTask(scrapeGoogleShopping),
+            scrapeTask(scrapeEbay)
+        ]);
+        
+        const duration = Date.now() - startTime;
+        logger.info(`Parallel search completed in ${duration}ms`);
 
-        let results = [];
+        // Flatten results from all sources
+        let results = resultsArray.flat();
 
-        // Strategy 2: Try eBay (More reliable)
-        results = await scrapeEbay(page, query);
-
-        // Strategy 3: Premium Mock Data (Guarantees "Best in Class" visual experience if scraping is blocked)
+        // Strategy 3: Premium Mock Data (Only if BOTH sources fail or are blocked)
         if (results.length === 0) {
             results = getMockData(query);
         }

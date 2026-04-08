@@ -60,18 +60,22 @@ export const sendMessage = async (req, res) => {
         let metadata = {};
 
         if (intent.isSearch && intent.query) {
-            // 2. Perform Search
-            // Notify user we are searching (optional, handled by frontend loading state usually)
-
+            // 2. Perform Search (Now Parallel)
             const searchResults = await scraperService.searchProducts(intent.query);
 
+            // Sort results by price (Low to High)
+            const sortedResults = [...searchResults].sort((a, b) => {
+                const parsePrice = (p) => parseFloat(p.toString().replace(/[^0-9.]/g, '')) || Infinity;
+                return parsePrice(a.price) - parsePrice(b.price);
+            });
+
             // 3. Generate Summary Response
-            aiReplyContent = await aiService.generateResponse(message, searchResults);
+            aiReplyContent = await aiService.generateResponse(message, sortedResults.slice(0, 5));
 
             metadata = {
                 type: 'product_search',
                 query: intent.query,
-                results: searchResults
+                results: sortedResults
             };
         } else {
             // Conversational Reply
