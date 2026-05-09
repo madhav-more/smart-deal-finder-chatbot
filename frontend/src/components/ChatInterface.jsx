@@ -8,7 +8,7 @@ function ChatInterface() {
     const [messages, setMessages] = useState([
         {
             role: 'assistant',
-            content: 'Hello! I\'m your AI Shopping Assistant. I can help you find the best deals on the web. Try asking: \n\n"Find the best price for iPhone 15 Pro" or "Compare prices for Sony WH-1000XM5".',
+            content: 'Namaste! I\'m your AI Shopping Assistant for India. I can help you find the best deals on Amazon, Flipkart, and more. Try asking: \n\n"Find the best price for iPhone 15 Pro in India" or "Compare prices for Sony WH-1000XM5 headphones".',
         },
     ]);
     const [input, setInput] = useState('');

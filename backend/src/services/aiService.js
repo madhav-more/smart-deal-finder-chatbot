@@ -29,8 +29,8 @@ const GROQ_MODEL_NAME = "llama-3.3-70b-versatile";
 export const parseIntent = async (message) => {
     try {
         const systemPrompt = `
-        You are an AI assistant for a shopping app.
-        Analyze the user's message to determine if they want to search for a product price, deal, or comparison.
+        You are an AI assistant for a shopping app specialized in the Indian market.
+        Analyze the user's message to determine if they want to search for a product price, deal, or comparison in India.
         
         If the user is asking for a product search/price/deal, respond with valid JSON:
         {
@@ -42,7 +42,7 @@ export const parseIntent = async (message) => {
         {
             "isSearch": false,
             "query": null,
-            "conversationalReply": "A natural, helpful response to the user's greeting or question"
+            "conversationalReply": "A natural, helpful response to the user's greeting or question, specialized for Indian shoppers"
         }
 
         Only return the JSON object, no markdown formatting.
@@ -108,13 +108,15 @@ export const generateResponse = async (userMessage, searchResults) => {
         }
 
         const systemPrompt = `
-        You are a shopping assistant.
-        The user asked for a product. You have been provided with search results.
-        Analyze these deals and provide a helpful summary to the user. 
-        - Highlight the best price.
-        - Mention the platforms available.
+        You are a shopping assistant for the Indian market.
+        The user asked for a product. You have been provided with search results from Indian retailers (Amazon.in, Flipkart, and Google Shopping).
+        Analyze these deals and provide a helpful summary to the user in the context of the Indian market. 
+        - Highlight the best price in INR (₹).
+        - Mention the platforms available (Amazon.in, Flipkart, etc.).
+        - If the user specified a budget, prioritize items within that budget.
+        - If some items are slightly above the budget, you can mention them as "premium alternatives" or "options just outside your range" if they offer great value.
         - Keep it concise and friendly.
-        - Do not list every single technical detail, just the key info helping them decide.
+        - IMPORTANT: If the provided search results contain "isFallback": true, you MUST start your response with: "I'm having trouble reaching the stores live, but historically this item costs around [Best Price]."
         `;
 
         const userContent = `

@@ -60,21 +60,50 @@ export const sendMessage = async (req, res) => {
         let metadata = {};
 
         if (intent.isSearch && intent.query) {
-            // 2. Perform Search (Now Parallel)
+            // 2. Perform Search (Parallel)
             const searchResults = await scraperService.searchProducts(intent.query);
 
-            // Sort results by price (Low to High)
-            const sortedResults = [...searchResults].sort((a, b) => {
-                const parsePrice = (p) => parseFloat(p.toString().replace(/[^0-9.]/g, '')) || Infinity;
-                return parsePrice(a.price) - parsePrice(b.price);
-            });
+            const parsePrice = (p) => {
+                if (!p) return Infinity;
+                return parseFloat(p.toString().replace(/[^0-9.]/g, '')) || Infinity;
+            };
+
+            // 2a. Extract Price Limit from User Message
+            const priceLimitRegex = /(?:under|below|less than|budget|max|upto|within)\s*(?:rs\.?|inr)?\s*(\d+(?:,\d+)*)\s*(k)?/i;
+            const match = message.match(priceLimitRegex);
+            let priceLimit = null;
+            
+            if (match) {
+                let amount = parseFloat(match[1].replace(/,/g, ''));
+                if (match[2] && match[2].toLowerCase() === 'k') amount *= 1000;
+                priceLimit = amount;
+                logger.info(`Detected price limit: ₹${priceLimit}`);
+            }
+
+            // 2b. Sort and Filter Results
+            let sortedResults = [...searchResults].sort((a, b) => parsePrice(a.price) - parsePrice(b.price));
+
+            if (priceLimit) {
+                const underBudget = sortedResults.filter(item => parsePrice(item.price) <= priceLimit);
+                const overBudget = sortedResults.filter(item => parsePrice(item.price) > priceLimit);
+                
+                // Show all under budget, and 3 best-value items slightly above budget (leeway)
+                sortedResults = [
+                    ...underBudget,
+                    ...overBudget.slice(0, 3) // Show top 3 closest items above budget as requested
+                ];
+                
+                logger.info(`Filtered results: ${underBudget.length} under budget, ${Math.min(overBudget.length, 3)} over budget shown.`);
+            }
 
             // 3. Generate Summary Response
-            aiReplyContent = await aiService.generateResponse(message, sortedResults.slice(0, 5));
+            // Pass the priceLimit to aiService if needed for better context
+            aiReplyContent = await aiService.generateResponse(message, sortedResults.slice(0, 8)); // Show more results now
 
             metadata = {
                 type: 'product_search',
                 query: intent.query,
+                priceLimit: priceLimit,
                 results: sortedResults
             };
         } else {
